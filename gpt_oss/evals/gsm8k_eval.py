@@ -186,7 +186,7 @@ class MGSMEval(Eval):
         for lang in self._languages:
             lang_examples = get_lang_examples(lang)
             #examples.extend(lang_examples[: self._num_examples_per_lang])
-            examples.extend(lang_examples[:10])
+            examples.extend(lang_examples)
             # examples.extend(lang_examples)
         self.examples = examples
 

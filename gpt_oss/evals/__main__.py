@@ -23,7 +23,6 @@ class ParallelSampler:
         self.samplers = samplers
 
     async def __call__(self, eval_obj):
-        # 获取总样本数
         total_examples = eval_obj.get_examples()
         num_samplers = len(self.samplers)
         chunk_size = (len(total_examples) + num_samplers - 1) // num_samplers
@@ -42,7 +41,7 @@ class ParallelSampler:
         results = await asyncio.gather(*tasks)
         all_evals = []
         for each in results:
-            all_evals.extend(await each)
+            all_evals.extend(each)
 
 
         return report.aggregate_results(all_evals, default_stats=("mean", "std"))
