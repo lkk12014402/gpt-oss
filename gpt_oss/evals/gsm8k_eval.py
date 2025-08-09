@@ -185,7 +185,6 @@ class MGSMEval(Eval):
         examples = []
         for lang in self._languages:
             lang_examples = get_lang_examples(lang)
-            #examples.extend(lang_examples[: self._num_examples_per_lang])
             examples.extend(lang_examples)
         self.examples = examples
 
@@ -227,5 +226,5 @@ class MGSMEval(Eval):
                 metrics={language: score, latin_language: score},
             )
 
-        results = report.map_with_progress(fn, self.examples)
+        results = report.map_with_progress(fn, self.examples, num_threads=8)
         return report.aggregate_results(results, default_stats=("mean", "std"))

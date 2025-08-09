@@ -5,7 +5,7 @@ from typing import Callable, Literal, Optional
 import json
 
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from openai_harmony import (
     Author,
     Conversation,
@@ -330,10 +330,36 @@ def create_api_server(
         def _send_event(self, event: ResponseEvent):
             event.sequence_number = self.sequence_number
             self.sequence_number += 1
+            # return event.model_dump_json(indent=None)
+            # self.as_sse = False
+            # print(event.model_dump_json(indent=None))
             if self.as_sse:
                 return f"event: {event.type}\ndata: {event.model_dump_json(indent=None)}\n\n"
             else:
                 return event
+
+        async def run_nostream(self):
+
+            self.new_request = True
+
+            next_tok = infer_next_token(
+                    self.tokens,
+                    temperature=self.temperature,
+                    new_request=self.new_request,
+                )
+            self.output_tokens.extend(next_tok)
+
+            initial_response = generate_response(
+                self.initial_tokens,
+                self.output_tokens,
+                self.request_body,
+                function_call_ids=self.function_call_ids,
+                response_id=self.response_id,
+                previous_response_id=self.request_body.previous_response_id,
+            )
+
+            return initial_response
+
 
         async def run(self):
             browser_tool = self.browser_tool
@@ -894,22 +920,26 @@ def create_api_server(
             responses_store[rid] = (req, resp)
 
         event_stream = StreamResponsesEvents(
-            initial_tokens,
-            body,
-            as_sse=body.stream,
-            request=request,
-            response_id=response_id,
-            store_callback=store_callback,
-            browser_tool=browser_tool,
-        )
+                initial_tokens,
+                body,
+                as_sse=body.stream,
+                request=request,
+                response_id=response_id,
+                store_callback=store_callback,
+                browser_tool=browser_tool,
+            )
 
         if body.stream:
             return StreamingResponse(event_stream.run(), media_type="text/event-stream")
         else:
+            return await event_stream.run_nostream()
+            """
+            # for stream
             last_event = None
             async for event in event_stream.run():
                 last_event = event
 
             return last_event.response
+            """
 
     return app
