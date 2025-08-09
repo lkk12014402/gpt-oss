@@ -61,7 +61,12 @@ class ResponsesSampler(SamplerBase):
                         max_output_tokens=self.max_tokens,
                     )
 
+                # print(message_list)
+                # print(self.reasoning_model)
+                # print(response)
+
                 for output in response.output:
+                    # print(output)
                     if hasattr(output, "text"):
                         message_list.append(self._pack_message(getattr(output, "role", "assistant"), output.text))
                     elif hasattr(output, "content"):

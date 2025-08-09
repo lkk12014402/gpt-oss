@@ -6,6 +6,8 @@ from . import report
 from .basic_eval import BasicEval
 from .gpqa_eval import GPQAEval
 from .aime_eval import AIME25Eval
+from .mmlu_eval import MMLUEval 
+from .gsm8k_eval import MGSMEval
 from .healthbench_eval import HealthBenchEval
 from .chat_completions_sampler import (
     OPENAI_SYSTEM_MESSAGE_API,
@@ -72,6 +74,7 @@ def main():
     args = parser.parse_args()
 
     sampler_cls = ResponsesSampler if args.sampler == "responses" else ChatCompletionsSampler
+    print(f"sampler_cls: {sampler_cls}")
 
     models = {}
     for model_name in args.model.split(","):
@@ -139,6 +142,12 @@ def main():
                     num_examples=num_examples,
                     n_threads=args.n_threads or 1,
                 )
+            case "mmlu":
+                return MMLUEval(num_examples=1 if debug_mode else num_examples)
+            case "mgsm":
+                return MGSMEval(
+                    num_examples_per_lang=10 if debug_mode else num_examples or 250, languages=["en"]
+                )
             case _:
                 raise Exception(f"Unrecognized eval type: {eval_name}")
 
@@ -156,6 +165,8 @@ def main():
     date_str = now.strftime("%Y%m%d_%H%M%S")
     for model_name, sampler in models.items():
         for eval_name, eval_obj in evals.items():
+            print(sampler)
+            print(eval_obj)
             result = eval_obj(sampler)
             # ^^^ how to use a sampler
             file_stem = f"{eval_name}_{model_name}_temp{args.temperature}"
