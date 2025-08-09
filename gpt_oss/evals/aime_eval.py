@@ -92,6 +92,36 @@ class AIME25Eval(Eval):
                 html=html, score=score, convo=convo, metrics={"chars": len(response_text)}
             )
 
+        async def a_fn(row: dict):
+            prompt_messages = [
+                sampler._pack_message(
+                    content=format_aime_question(row), role="user"
+                )
+            ]
+            sampler_response = sampler(prompt_messages)
+            response_text = sampler_response.response_text
+            actual_queried_prompt_messages = sampler_response.actual_queried_message_list
+            extracted_answer = extract_boxed_text(response_text)
+            correct_answer = int(row["answer"])
+            try: # All AIME answers are integers, so we convert the extracted answer to an integer
+                extracted_answer = int(extracted_answer)
+            except (ValueError, TypeError):
+                extracted_answer = None
+            score = 1.0 if extracted_answer == correct_answer else 0.0
+            html = report.jinja_env.from_string(report.HTML_JINJA).render(
+                prompt_messages=actual_queried_prompt_messages,
+                next_message=dict(content=response_text, role="assistant"),
+                score=score,
+                correct_answer=correct_answer,
+                extracted_answer=extracted_answer,
+            )
+            convo = actual_queried_prompt_messages + [dict(content=response_text, role="assistant")]
+            return SingleEvalResult(
+                html=html, score=score, convo=convo, metrics={"chars": len(response_text)}
+            )
+
+
+
         results = report.map_with_progress(fn, self.examples, num_threads=self.n_threads)
         return report.aggregate_results(results)
 

@@ -97,6 +97,38 @@ def map_with_progress(
         with ThreadPool(min(num_threads, len(xs))) as pool:
             return list(pbar_fn(pool.imap_unordered(f, xs), total=len(xs)))
 
+from typing import Awaitable, List
+import asyncio
+from tqdm.asyncio import tqdm_asyncio
+async def a_map_with_progress(
+    f: Callable[[Any], Awaitable[Any]],
+    xs: list[Any],
+    num_threads: int = 16,
+    pbar: bool = True,
+) -> List[Any]:
+    """
+    Apply async function f to each element of xs, using asyncio for concurrency, and show progress.
+    """
+    if os.getenv("debug"):
+        # Debug模式下串行执行（便于调试）
+        results = []
+        iterator = tqdm_asyncio(xs, total=len(xs)) if pbar else xs
+        for x in iterator:
+            results.append(await f(x))
+        return results
+    else:
+        semaphore = asyncio.Semaphore(min(num_threads, len(xs)))
+
+        async def sem_task(x):
+            async with semaphore:
+                return await f(x)
+
+        tasks = [sem_task(x) for x in xs]
+        iterator = tqdm_asyncio(asyncio.as_completed(tasks), total=len(xs)) if pbar else asyncio.as_completed(tasks)
+        results = []
+        async for fut in iterator:
+            results.append(await fut)
+        return results
 
 jinja_env = jinja2.Environment(
     loader=jinja2.BaseLoader(),

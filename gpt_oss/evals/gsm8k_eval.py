@@ -185,10 +185,26 @@ class MGSMEval(Eval):
         examples = []
         for lang in self._languages:
             lang_examples = get_lang_examples(lang)
-            examples.extend(lang_examples)
+            #examples.extend(lang_examples[: self._num_examples_per_lang])
+            examples.extend(lang_examples[:10])
+            # examples.extend(lang_examples)
         self.examples = examples
 
-    def __call__(self, sampler: SamplerBase) -> EvalResult:
+    def get_examples(self):
+        return self.examples
+
+    def run_on_subset(self, sampler, examples):
+        self.examples = examples
+        return self(sampler)
+
+    async def run_on_subset_async(self, sampler, examples):
+        self.examples = examples
+        return await self(sampler)
+
+
+
+    async def __call__(self, sampler: SamplerBase) -> EvalResult:
+
         def fn(example: dict[str, str]):
             language = example["lang"]
             latin_language = "group_latin" if language in LATIN_LANGUAGES else "group_non_latin"
@@ -226,5 +242,44 @@ class MGSMEval(Eval):
                 metrics={language: score, latin_language: score},
             )
 
-        results = report.map_with_progress(fn, self.examples, num_threads=8)
-        return report.aggregate_results(results, default_stats=("mean", "std"))
+        async def a_fn(example: dict[str, str]):
+            language = example["lang"]
+            latin_language = "group_latin" if language in LATIN_LANGUAGES else "group_non_latin"
+            correct_answer = example["targets"]
+            instruction = LANG_TO_INSTRUCTIONS[language]
+            prompt_messages = [
+                sampler._pack_message(
+                    content=gsm8k_template.format(question=example["inputs"]), role="user"
+                )
+            ]
+            try:
+                sampler_response = await sampler(prompt_messages)
+                response_text = sampler_response.response_text
+                actual_queried_prompt_messages = sampler_response.actual_queried_message_list
+            except Exception as e:
+                response_text = ""
+
+            answer_prefix = LANG_TO_ANSWER_PREFIX[language]
+            # extracted_answer = parse_answer(response_text, answer_prefix)
+            extracted_answer = response_text
+
+            score = score_mgsm(correct_answer, extracted_answer)
+            html = report.jinja_env.from_string(report.HTML_JINJA).render(
+                prompt_messages=actual_queried_prompt_messages,
+                next_message=dict(content=response_text, role="assistant"),
+                score=score,
+                correct_answer=correct_answer,
+                extracted_answer=extracted_answer or None,
+            )
+            convo = actual_queried_prompt_messages + [dict(content=response_text, role="assistant")]
+            return SingleEvalResult(
+                html=html,
+                score=score,
+                convo=convo,
+                metrics={language: score, latin_language: score},
+            )
+
+        results = await report.a_map_with_progress(a_fn, self.examples, num_threads=8)
+        # results = await report.a_map_with_progress(a_fn, sub_examples, num_threads=8)
+        # return report.aggregate_results(results, default_stats=("mean", "std"))
+        return results

@@ -17,38 +17,6 @@ from .responses_sampler import ResponsesSampler
 
 import asyncio
 
-
-class ParallelSampler:
-    def __init__(self, samplers):
-        self.samplers = samplers
-
-    async def __call__(self, eval_obj):
-        # 获取总样本数
-        total_examples = eval_obj.get_examples()
-        num_samplers = len(self.samplers)
-        chunk_size = (len(total_examples) + num_samplers - 1) // num_samplers
-
-        loop = asyncio.get_running_loop()
-
-        tasks = []
-        for i, sampler in enumerate(self.samplers):
-            subset = total_examples[i * chunk_size : (i + 1) * chunk_size]
-            print(len(subset))
-            # tasks.append(asyncio.to_thread(eval_obj.run_on_subset, sampler, subset))
-            # tasks.append(loop.run_in_executor(None, eval_obj.run_on_subset, sampler, subset))
-            tasks.append(eval_obj.run_on_subset_async(sampler, subset))
-
-        print(tasks)
-        results = await asyncio.gather(*tasks)
-        all_evals = []
-        for each in results:
-            all_evals.extend(await each)
-
-
-        return report.aggregate_results(all_evals, default_stats=("mean", "std"))
-        # return await asyncio.gather(*tasks)
-
-
 async def main():
     parser = argparse.ArgumentParser(
         description="Evaluate the models.",
@@ -108,19 +76,18 @@ async def main():
 
     sampler_cls = ResponsesSampler if args.sampler == "responses" else ChatCompletionsSampler
     print(f"sampler_cls: {sampler_cls}")
-    base_urls = args.base_url.split(",")
-    print(base_urls)
 
     models = {}
     for model_name in args.model.split(","):
         for reasoning_effort in args.reasoning_effort.split(","):
-            samplers = [sampler_cls(model=model_name, reasoning_model=True, reasoning_effort=reasoning_effort,
-                                    temperature=args.temperature, base_url=url, max_tokens=131_072)
-                        for url in base_urls]
-            print(samplers)
-
-            models[f"{model_name}-{reasoning_effort}"] = ParallelSampler(samplers)
-
+            models[f"{model_name}-{reasoning_effort}"] = sampler_cls(
+                model=model_name,
+                reasoning_model=True,
+                reasoning_effort=reasoning_effort,
+                temperature=args.temperature,
+                base_url=args.base_url,
+                max_tokens=131_072,
+            )
 
     print(f"Running with args {args}")
 
@@ -201,8 +168,7 @@ async def main():
         for eval_name, eval_obj in evals.items():
             print(sampler)
             print(eval_obj)
-            # result = await eval_obj(sampler)
-            result = await sampler(eval_obj)
+            result = await eval_obj(sampler)
             # ^^^ how to use a sampler
             file_stem = f"{eval_name}_{model_name}_temp{args.temperature}"
             # file stem should also include the year, month, day, and time in hours and minutes

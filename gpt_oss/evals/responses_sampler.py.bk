@@ -1,16 +1,15 @@
 import time
-import asyncio
 from typing import Any
 
 import openai
-from openai import AsyncOpenAI
+from openai import OpenAI
 
 from .types import MessageList, SamplerBase, SamplerResponse
 
 
 class ResponsesSampler(SamplerBase):
     """
-    Sample from OpenAI's responses API asynchronously
+    Sample from OpenAI's responses API
     """
 
     def __init__(
@@ -23,8 +22,7 @@ class ResponsesSampler(SamplerBase):
         reasoning_effort: str | None = None,
         base_url: str = "http://localhost:8000/v1",
     ):
-        print(f"init: {base_url}")
-        self.client = AsyncOpenAI(base_url=base_url, timeout=24*60*60)
+        self.client = OpenAI(base_url=base_url, timeout=24*60*60)
         self.model = model
         self.developer_message = developer_message
         self.temperature = temperature
@@ -36,7 +34,7 @@ class ResponsesSampler(SamplerBase):
     def _pack_message(self, role: str, content: Any) -> dict[str, Any]:
         return {"role": role, "content": content}
 
-    async def __call__(self, message_list: MessageList) -> SamplerResponse:
+    def __call__(self, message_list: MessageList) -> SamplerResponse:
         if self.developer_message:
             message_list = [
                 self._pack_message("developer", self.developer_message)
@@ -50,20 +48,25 @@ class ResponsesSampler(SamplerBase):
                         if self.reasoning_effort
                         else None
                     )
-                    response = await self.client.responses.create(
+                    response = self.client.responses.create(
                         model=self.model,
                         input=message_list,
                         reasoning=reasoning,
                     )
                 else:
-                    response = await self.client.responses.create(
+                    response = self.client.responses.create(
                         model=self.model,
                         input=message_list,
                         temperature=self.temperature,
                         max_output_tokens=self.max_tokens,
                     )
 
+                # print(message_list)
+                # print(self.reasoning_model)
+                # print(response)
+
                 for output in response.output:
+                    # print(output)
                     if hasattr(output, "text"):
                         message_list.append(self._pack_message(getattr(output, "role", "assistant"), output.text))
                     elif hasattr(output, "content"):
@@ -84,11 +87,11 @@ class ResponsesSampler(SamplerBase):
                     actual_queried_message_list=message_list,
                 )
             except Exception as e:
-                exception_backoff = 2**trial  # exponential back off
+                exception_backoff = 2**trial  # expontial back off
                 print(
                     f"Rate limit exception so wait and retry {trial} after {exception_backoff} sec",
                     e,
                 )
-                await asyncio.sleep(exception_backoff)
+                time.sleep(exception_backoff)
                 trial += 1
             # unknown error shall throw exception
