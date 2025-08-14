@@ -14,6 +14,7 @@ from .chat_completions_sampler import (
     ChatCompletionsSampler,
 )
 from .responses_sampler import ResponsesSampler
+import os
 
 
 def main():
@@ -69,6 +70,12 @@ def main():
     )
     parser.add_argument(
         "--examples", type=int, help="Number of examples to use (overrides default)"
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="./results",
+        help="Select an eval by name. Accepts a comma-separated list.",
     )
 
     args = parser.parse_args()
@@ -172,7 +179,12 @@ def main():
             file_stem = f"{eval_name}_{model_name}_temp{args.temperature}"
             # file stem should also include the year, month, day, and time in hours and minutes
             file_stem += f"_{date_str}"
-            report_filename = f"/tmp/{file_stem}{debug_suffix}.html"
+            # report_filename = f"/tmp/{file_stem}{debug_suffix}.html"
+            report_filename = os.path.join(args.output_dir,f"{file_stem}{debug_suffix}.html")
+            file_dir = os.path.dirname(report_filename)
+            if not os.path.exists(file_dir):
+                os.makedirs(file_dir)
+
             print(f"Writing report to {report_filename}")
             with open(report_filename, "w") as fh:
                 fh.write(report.make_report(result))
@@ -181,12 +193,14 @@ def main():
             # Sort metrics by key
             metrics = dict(sorted(metrics.items()))
             print(metrics)
-            result_filename = f"/tmp/{file_stem}{debug_suffix}.json"
+            # result_filename = f"/tmp/{file_stem}{debug_suffix}.json"
+            result_filename = os.path.join(args.output_dir,f"{file_stem}{debug_suffix}.json")
             with open(result_filename, "w") as f:
                 f.write(json.dumps(metrics, indent=2))
             print(f"Writing results to {result_filename}")
 
-            full_result_filename = f"/tmp/{file_stem}{debug_suffix}_allresults.json"
+            # full_result_filename = f"/tmp/{file_stem}{debug_suffix}_allresults.json"
+            full_result_filename = os.path.join(args.output_dir,f"{file_stem}{debug_suffix}_allresults.json")
             with open(full_result_filename, "w") as f:
                 result_dict = {
                     "score": result.score,
